@@ -8,14 +8,59 @@
     }
 }(this, function () {
 
-	function chechRecordProp(record_i, elToCheck_i){
+	var parseImpls = {
+		/*
+		* @param data - field value to be parsed
+		* @return parsed value or throw error for unsuccess parse
+		*/
+		number: function(data){
+			var res = parseInt(data);
+			if((res+'').length!=data.length){
+				throw new Error('Not all characters are numbers')
+			}else if(res=='NaN'){
+				throw new Error('Not a number')
+			}
+			return res;
+		}
+	}
+
+	function tryToParse(record_i, elToCheck_i){
+		var tmpRez = false;		
+		var parsedVal;
+		var parseSuccess = true;
+		try{
+			if(typeof parseImpls[record_i] == 'function'){
+				parsedVal = parseImpls[record_i](elToCheck_i)	
+			}else{
+				throw new Error('No implementation for parsing "'+record_i+'" in RecordValidator.parseImpls!')
+			}
+		}catch(err){
+			parseSuccess = false;
+			console.warn('Parsing failed!', err)
+		}
+		if(parseSuccess){
+			tmpRez = checkRecordProp(record_i, parsedVal);
+		}			
+		return tmpRez;
+	}
+
+	function checkRecordProp(record_i, elToCheck_i){
 		var tmpRez = true;						
 		if(typeof elToCheck_i !== 'undefined'){					
 			if(typeof record_i === 'string'){
 				//just check
-				tmpRez = typeof elToCheck_i === record_i;
+				var recParts = record_i.split('-');
+				var record_i_type = record_i_type = recParts[recParts.length-1];
+				var tryParse = recParts[0].indexOf('parse')!=-1;				  
+				
+				tmpRez = typeof elToCheck_i === record_i_type;
 				if(tmpRez!==true){
-					tmpRez = 'Must be '+record_i+', but '+(typeof elToCheck_i)+' given!'
+					if(tryParse){
+						tmpRez = tryToParse(record_i_type, elToCheck_i);
+					}
+					if(tmpRez!==true){
+						tmpRez = 'Must be '+record_i_type+', but '+(typeof elToCheck_i)+' given!'
+					}
 				}
 			}else if(Array.isArray(record_i)){
 				//check all array items for current type
@@ -52,14 +97,14 @@
 		var tmpRez = true;	
 		if(Array.isArray(record) || typeof record === 'object'){
 			for(var i in record){		
-				tmpRez = chechRecordProp(record[i], elToCheck[i]);
+				tmpRez = checkRecordProp(record[i], elToCheck[i]);
 				if(tmpRez!==true){						
 					tmpRez = '.'+i +' '+ tmpRez;
 					break;
 				}
 			}
 		}else{
-			tmpRez = chechRecordProp(record, elToCheck);
+			tmpRez = checkRecordProp(record, elToCheck);
 			if(tmpRez!==true){					
 				tmpRez = ' '+ tmpRez;					
 			}
@@ -71,14 +116,17 @@
 		var tmpRez = true;
 		var key='';		
 		record = Array.isArray(record) ? record : [record]; // needed or not?		
-		if(record.length==1){ // can be called chechRecordProp, but there will be more "if"-s (slow)
+		if(record.length==1){ // can be called checkRecordProp, but there will be more "if"-s (slow)
 			//loop all elToCheck items
 			if(typeof record[0] === 'string'){
 				for(var j=0; j<elToCheck.length; j++){					
 					tmpRez = typeof elToCheck[j] === record[0];
 					if(tmpRez!==true){
-						tmpRez = 'Must be '+record[0]+', but '+(typeof elToCheck[j])+' given!'									
-						break;
+						tmpRez = tryToParse(record[0], elToCheck[j]);						
+						if(tmpRez!==true){
+							tmpRez = 'Must be '+record[0]+', but '+(typeof elToCheck[j])+' given!'
+							break;
+						}	
 					}
 				}
 			}else if(Array.isArray(record[0])){				
@@ -118,5 +166,6 @@
 	return {
 		check: checkRecord,
 		buildChecker: buildChecker,
+		parseImpls: parseImpls
 	}
 }));
